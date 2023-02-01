@@ -202,13 +202,10 @@ async function pushToGoogleChatThread(message, thread = null) {
     let separator = "\n++++++++++++++++++++++++++++++++++++++++++++\n";
     message = separator.concat(message);
     message = message.concat(separator);
-    let googleRes = await axios.post(config.googleChatEndpoint, {
-        text: message,
-        thread: {
-            name: thread
-        }
+    message = message.concat(thread);
+    await axios.post(config.googleChatEndpoint, {
+        text: message
     }).catch(()=>{
         // console.log(e)
     });
-    return googleRes.data.thread.name;
 }
