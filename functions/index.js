@@ -2,7 +2,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
 
-const config = require("./config.json");
+const config = require("./config-example.json");
 
 var serviceAccount = require(config.firebaseServiceAccountFile);
 
@@ -43,42 +43,52 @@ function onPullRequestEvent(eventType, actor, req, res) {
     let pullRequest = req.body.pullrequest;
     switch (eventType) {
         case "pullrequest:created":
+            console.log("[PR]created");
             prCreated(pullRequest, actor, req, res);
             break;
         case "pullrequest:updated":
+            console.log("[PR]updated");
             prUpdated(pullRequest, actor, req, res);
             break;
         case "pullrequest:approved":
+            console.log("[PR]approved");
             prApproved(pullRequest, actor, req, res);
             break;
         case "pullrequest:unapproved":
+            console.log("[PR]unapproved");
             prUnapproved(pullRequest, actor, req, res);
             break;
         case "pullrequest:merged":
+            console.log("[PR]merged");
             prMerged(pullRequest, actor, req, res);
             break;
         case "pullrequest:rejected":
+            console.log("[PR]rejected");
             prRejected(pullRequest, actor, req, res);
             break;
         case "pullrequest:comment_created":
+            console.log("[PR]comment_created");
             prCommentCreated(pullRequest, actor, req, res);
             break;
         case "pullrequest:comment_updated":
+            console.log("[PR]comment_updated");
             prCommentUpdated(pullRequest, actor, req, res);
             break;
         case "pullrequest:comment_deleted":
+            console.log("comment_deleted");
             prCommentDeleted(pullRequest, actor, req, res);
             break;
         default:
             res.send("Ignored");
     }
+    //printObject(pullRequest);    
+    console.log(pullRequest.links.html.href);    
 }
 
 async function repoPush(actor, req, res){
     let repository = req.body.repository;
     let message = "";
     for (let change of req.body.push.changes) {
-        // console.log(change);
         for (let commit of change.commits) {
             message += "_" + actor.display_name.trim() + "_ has <" + commit.links.html.href + "|commited>: " + commit.message;
         }
@@ -171,7 +181,9 @@ async function getRepoThreadIdOrCreated(repository) {
 
 async function getPrThreadIdOrCreated(pullRequest, req) {
     let threadRef = "PR_" + pullRequest.links.html.href.split("/bitbucket.org/")[1];
+    console.log("threadRef = " + threadRef);
     let threadId = await threadIdOf(threadRef);
+    console.log("find threadId = " + threadId);
     if (!threadId) {
         let repository = req.body.repository;
         let message = "<users/all> New Pull Request\n" +
@@ -180,8 +192,8 @@ async function getPrThreadIdOrCreated(pullRequest, req) {
             "Branch : " + pullRequest.source.branch.name.trim() + "   >   " + pullRequest.destination.branch.name.trim() + "\n" +
             "Author : _" + pullRequest.author.display_name.trim() + "_\n" +
             "Link :     <" + pullRequest.links.html.href + "|" + pullRequest.links.html.href + ">";
-        threadId = await pushToGoogleChatThread(message);
-        // .then(threadId => saveThreadId(threadRef, threadId));
+        threadId = await pushToGoogleChatThread(message)
+                         .then(threadId => saveThreadId(threadRef, threadId));
     }
     return threadId;
 }
@@ -192,20 +204,30 @@ async function threadIdOf(threadRef) {
         .then((snapshot) => snapshot.val());
 }
 
-// async function saveThreadId(threadRef, threadId) {
-//     return await admin.database().ref("chatThread").child(threadRef).set({
-//         threadId: threadId.toString()
-//     });
-// }
+async function saveThreadId(threadRef, threadId) {
+    console.log("generate threadId = " + threadId);
+    return await admin.database().ref("chatThread").child(threadRef).set({
+        threadId: threadId.toString()
+    });
+}
 
 async function pushToGoogleChatThread(message, thread = null) {
+    console.log("pushToGoogleChatThread");
     let separator = "\n++++++++++++++++++++++++++++++++++++++++++++\n";
     message = separator.concat(message);
     message = message.concat(separator);
-    message = message.concat(thread);
-    await axios.post(config.googleChatEndpoint, {
-        text: message
+    let googleRes = await axios.post(config.googleChatEndpoint, {
+        text: message,
+        thread: {
+            name: thread
+        }        
     }).catch(()=>{
         // console.log(e)
     });
+    //console.log(googleRes.data);
+    return googleRes.data.thread.name;
+}
+
+function printObject(obj) {
+    Object.keys(obj).forEach((prop)=> console.log(prop));
 }
